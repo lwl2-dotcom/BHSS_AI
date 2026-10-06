@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics & Chemistry Virtual Lab - Bunsen Burner Simulator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#0284c7',
+                            600: '#0265d2',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        },
+                        flame: {
+                            yellow: '#ffaa00',
+                            blueInner: '#00d4ff',
+                            blueOuter: '#0055ff',
+                            strike: '#ff3300'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['Space Grotesk', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes flicker {
+            0%, 100% { transform: scale(1) rotate(-0.5deg); opacity: 0.95; }
+            25% { transform: scale(1.03, 0.97) rotate(1deg); opacity: 1; }
+            50% { transform: scale(0.97, 1.04) rotate(-1deg); opacity: 0.9; }
+            75% { transform: scale(1.02, 1.01) rotate(0.5deg); opacity: 0.98; }
+        }
+        @keyframes pulseGlow {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(255, 170, 0, 0.6)); }
+            50% { filter: drop-shadow(0 0 25px rgba(255, 170, 0, 0.9)); }
+        }
+        @keyframes pulseBlueGlow {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(0, 212, 255, 0.7)); }
+            50% { filter: drop-shadow(0 0 30px rgba(0, 85, 255, 0.95)); }
+        }
+        @keyframes screenShake {
+            0%, 100% { transform: translate(0, 0); }
+            10%, 30%, 50%, 70%, 90% { transform: translate(-8px, 5px); }
+            20%, 40%, 60%, 80% { transform: translate(8px, -5px); }
+        }
+        @keyframes irregularFlicker {
+            0% { transform: scale(1, 1) translate(0, 0) rotate(-1.5deg); opacity: 0.95; }
+            20% { transform: scale(1.08, 0.92) translate(-4px, 3px) rotate(3deg); opacity: 1; }
+            40% { transform: scale(0.92, 1.06) translate(4px, -3px) rotate(-2.5deg); opacity: 0.85; }
+            60% { transform: scale(1.05, 0.95) translate(-3px, 2px) rotate(2deg); opacity: 0.98; }
+            80% { transform: scale(0.95, 1.04) translate(3px, -2px) rotate(-1.5deg); opacity: 0.9; }
+            100% { transform: scale(1, 1) translate(0, 0) rotate(-1.5deg); opacity: 0.95; }
+        }
+        .animate-flicker { animation: flicker 0.15s infinite ease-in-out; }
+        .animate-irregular-flicker { animation: irregularFlicker 0.11s infinite ease-in-out; }
+        .glow-yellow { animation: pulseGlow 1.5s infinite ease-in-out; }
+        .glow-blue { animation: pulseBlueGlow 1.2s infinite ease-in-out; }
+        .shake { animation: screenShake 0.5s ease-in-out; }
+        
+        .draggable-item {
+            touch-action: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col justify-between selection:bg-brand-500 selection:text-white">
+
+    <header class="bg-slate-800/90 border-b border-slate-700/80 sticky top-0 z-40 backdrop-blur-md px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+                    <i class="fa-solid font-bold fa-atom text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        PhysiLab 虛擬實驗室
+                        <span class="text-xs bg-brand-500/20 text-brand-400 font-semibold px-2 py-0.5 rounded-full border border-brand-500/30">物理與化學</span>
+                    </h1>
+                    <p id="headerSubtext" class="text-xs text-slate-400">科學互動模擬器 • 本生燈安全與操作模組</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Language Toggle Button -->
+                <button id="langToggleBtn" onclick="toggleLanguage()" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold transition flex items-center gap-2 border border-cyan-400/40 shadow-md">
+                    <i class="fa-solid fa-language text-cyan-200 text-sm"></i>
+                    <span id="langText">English</span>
+                </button>
+                
+                <button id="soundToggleBtn" onclick="toggleAudio()" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium transition flex items-center gap-2 border border-slate-600">
+                    <i id="soundIcon" class="fa-solid fa-volume-high text-brand-400"></i>
+                    <span id="soundText">聲音 開啟</span>
+                </button>
+                <button onclick="togglePedagogyModal()" class="px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 text-xs font-medium transition flex items-center gap-2 border border-indigo-500/40">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                    <span id="pedagogyBtnText">教師說明與物理原理</span>
+                </button>
+                <button onclick="resetLab()" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium transition flex items-center gap-2 border border-slate-600">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span id="resetBtnText">重置實驗室</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section class="max-w-5xl mx-auto w-full px-4 pt-6">
+        <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 shadow-xl backdrop-blur-sm">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 relative">
+                <!-- Step 1 Pill -->
+                <div id="stepPill-1" class="step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-brand-600/20 border-brand-500 text-white">
+                    <div class="step-num w-7 h-7 rounded-full bg-brand-500 text-white font-bold text-xs flex items-center justify-center shrink-0">1</div>
+                    <div class="overflow-hidden">
+                        <div id="sPillTitle1" class="text-xs font-bold truncate">眼防護</div>
+                        <div id="sPillSub1" class="text-[10px] text-slate-300 truncate">佩戴護目鏡</div>
+                    </div>
+                </div>
+                <!-- Step 2 Pill -->
+                <div id="stepPill-2" class="step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-slate-800/80 border-slate-700 text-slate-400">
+                    <div class="step-num w-7 h-7 rounded-full bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">2</div>
+                    <div class="overflow-hidden">
+                        <div id="sPillTitle2" class="text-xs font-bold truncate">調節氣孔</div>
+                        <div id="sPillSub2" class="text-[10px] text-slate-400 truncate">關閉氣孔</div>
+                    </div>
+                </div>
+                <!-- Step 3 Pill -->
+                <div id="stepPill-3" class="step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-slate-800/80 border-slate-700 text-slate-400">
+                    <div class="step-num w-7 h-7 rounded-full bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">3</div>
+                    <div class="overflow-hidden">
+                        <div id="sPillTitle3" class="text-xs font-bold truncate">點火操作</div>
+                        <div id="sPillSub3" class="text-[10px] text-slate-400 truncate">先點火後開氣</div>
+                    </div>
+                </div>
+                <!-- Step 4 Pill -->
+                <div id="stepPill-4" class="step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-slate-800/80 border-slate-700 text-slate-400">
+                    <div class="step-num w-7 h-7 rounded-full bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">4</div>
+                    <div class="overflow-hidden">
+                        <div id="sPillTitle4" class="text-xs font-bold truncate">火焰控制</div>
+                        <div id="sPillSub4" class="text-[10px] text-slate-400 truncate">調節與原理</div>
+                    </div>
+                </div>
+                <!-- Step 5 Pill -->
+                <div id="stepPill-5" class="step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-slate-800/80 border-slate-700 text-slate-400">
+                    <div class="step-num w-7 h-7 rounded-full bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">5</div>
+                    <div class="overflow-hidden">
+                        <div id="sPillTitle5" class="text-xs font-bold truncate">安全關氣</div>
+                        <div id="sPillSub5" class="text-[10px] text-slate-400 truncate">關氣孔後關氣源</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <main class="max-w-5xl mx-auto w-full px-4 my-6 flex-grow flex flex-col justify-center">
+        <div id="mainLabStage" class="bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden min-h-[480px] flex flex-col justify-between">
+            
+            <!-- Context Banner / Task Instruction -->
+            <div class="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-4 mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 z-10">
+                <div class="flex items-center gap-3">
+                    <div id="instructionIcon" class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg shrink-0">
+                        <i class="fa-solid fa-glasses"></i>
+                    </div>
+                    <div>
+                        <span id="instructionTitle" class="text-xs font-semibold text-brand-400 uppercase tracking-wider block">步驟 1 任務</span>
+                        <h2 id="instructionText" class="text-sm md:text-base font-medium text-slate-100">
+                            安全第一！在開始實驗之前，請點擊或拖動護目鏡戴在學生臉上以確保安全。
+                        </h2>
+                    </div>
+                </div>
+                <div class="shrink-0 flex items-center gap-2">
+                    <span id="stepStatusBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <i class="fa-solid fa-lock mr-1"></i> <span id="statusBadgeText">需要操作</span>
+                    </span>
+                </div>
+            </div>
+
+            <div id="viewportCanvas" class="relative w-full flex-grow flex items-center justify-center py-4 min-h-[320px]">
+                
+                <!-- ================= SCREEN 1: SAFETY GOGGLES ================= -->
+                <div id="screen1" class="lab-screen w-full flex flex-col md:flex-row items-center justify-around gap-8">
+                    <!-- Student Face Container -->
+                    <div class="relative flex flex-col items-center">
+                        <div id="faceDropZone" class="relative w-64 h-64 bg-slate-900/80 rounded-full border-2 border-dashed border-slate-700 flex items-center justify-center transition-all duration-300">
+                            <!-- SVG Student Face -->
+                            <svg class="w-56 h-56" viewBox="0 0 200 200">
+                                <path d="M 40 100 C 30 40, 170 40, 160 100 Z" fill="#334155"/>
+                                <path d="M 50 80 Q 100 190 150 80 Q 150 50 100 45 Q 50 50 50 80 Z" fill="#fbcfe8"/>
+                                <path d="M 45 70 Q 100 30 155 70 Q 130 50 100 52 Q 70 50 45 70 Z" fill="#1e293b"/>
+                                <circle cx="46" cy="100" r="10" fill="#fbcfe8"/>
+                                <circle cx="154" cy="100" r="10" fill="#fbcfe8"/>
+                                <circle id="leftEye" cx="75" cy="95" r="7" fill="#0f172a"/>
+                                <circle id="rightEye" cx="125" cy="95" r="7" fill="#0f172a"/>
+                                <circle cx="77" cy="93" r="2.5" fill="#ffffff"/>
+                                <circle cx="127" cy="93" r="2.5" fill="#ffffff"/>
+                                <path d="M 65 82 Q 75 78 85 82" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round"/>
+                                <path d="M 115 82 Q 125 78 135 82" stroke="#475569" stroke-width="3" fill="none" stroke-linecap="round"/>
+                                <path d="M 100 95 Q 98 110 104 112" stroke="#f43f5e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                                <path id="mouth" d="M 82 130 Q 100 145 118 130" stroke="#e11d48" stroke-width="3" fill="none" stroke-linecap="round"/>
+                            </svg>
+
+                            <!-- Fitted Goggles Layer -->
+                            <div id="fittedGoggles" class="absolute hidden top-[72px] transition-all transform duration-300 scale-105">
+                                <svg class="w-44 h-20" viewBox="0 0 160 60">
+                                    <rect x="15" y="10" width="55" height="38" rx="10" fill="rgba(56, 189, 248, 0.4)" stroke="#0284c7" stroke-width="4"/>
+                                    <rect x="90" y="10" width="55" height="38" rx="10" fill="rgba(56, 189, 248, 0.4)" stroke="#0284c7" stroke-width="4"/>
+                                    <line x1="70" y1="26" x2="90" y2="26" stroke="#0284c7" stroke-width="5"/>
+                                    <path d="M 5 28 L 15 28" stroke="#334155" stroke-width="6"/>
+                                    <path d="M 145 28 L 155 28" stroke="#334155" stroke-width="6"/>
+                                    <path d="M 22 16 L 40 16" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+                                    <path d="M 97 16 L 115 16" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <p id="s1TargetLabel" class="text-xs text-slate-400 mt-2">護目鏡佩戴目標區</p>
+                    </div>
+
+                    <!-- Goggles Bench Pickup Area -->
+                    <div class="flex flex-col items-center bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
+                        <span id="s1BenchTitle" class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-4">安全裝備實驗台</span>
+                        
+                        <div id="gogglesDraggable" onclick="equipGogglesDirect()" class="draggable-item bg-slate-800 hover:bg-slate-700 border-2 border-brand-500/50 hover:border-brand-400 p-4 rounded-xl shadow-lg transition transform hover:scale-105 group text-center cursor-pointer">
+                            <svg class="w-36 h-16 mx-auto" viewBox="0 0 160 60">
+                                <rect x="15" y="10" width="55" height="38" rx="10" fill="rgba(56, 189, 248, 0.5)" stroke="#0284c7" stroke-width="4"/>
+                                <rect x="90" y="10" width="55" height="38" rx="10" fill="rgba(56, 189, 248, 0.5)" stroke="#0284c7" stroke-width="4"/>
+                                <line x1="70" y1="26" x2="90" y2="26" stroke="#0284c7" stroke-width="5"/>
+                                <path d="M 5 28 L 15 28" stroke="#334155" stroke-width="6"/>
+                                <path d="M 145 28 L 155 28" stroke="#334155" stroke-width="6"/>
+                                <path d="M 22 16 L 40 16" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+                                <path d="M 97 16 L 115 16" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+                            </svg>
+                            <span id="s1ClickWearText" class="text-xs font-medium text-brand-300 mt-2 block group-hover:text-white">
+                                <i class="fa-solid fa-hand-pointer mr-1"></i> 點擊佩戴護目鏡
+                            </span>
+                        </div>
+                        <p id="s1NoteText" class="text-[11px] text-slate-400 max-w-[200px] text-center mt-3">
+                            在操作本生燈火焰前，請務必佩戴符合 EN166 標準的防護護目鏡。
+                        </p>
+                    </div>
+                </div>
+
+                <!-- ================= SCREEN 2: AIR HOLE ADJUSTMENT ================= -->
+                <div id="screen2" class="lab-screen w-full hidden flex-col items-center justify-center">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center w-full max-w-3xl">
+                        <!-- Burner Collar Zoomed View -->
+                        <div class="bg-slate-900/90 p-6 rounded-2xl border border-slate-800 flex flex-col items-center relative">
+                            <span id="s2CloseUpText" class="text-xs font-mono text-brand-400 mb-2">特寫：氣孔調節環（左右拖動旋轉）</span>
+                            
+                            <svg id="step2CollarSvg" class="w-64 h-64 cursor-ew-resize select-none touch-none hover:brightness-110 transition-all active:scale-95" viewBox="0 0 200 200">
+                                <!-- Metal Chimney Tube Background -->
+                                <rect x="70" y="10" width="60" height="80" fill="url(#metalGrad)"/>
+                                <rect x="70" y="150" width="60" height="40" fill="url(#metalGrad)"/>
+                                
+                                <!-- Dark Air Hole inside Chimney Tube (x=85..115) -->
+                                <rect x="85" y="90" width="30" height="60" fill="#020617"/>
+                                
+                                <!-- Brass Rotating Collar Group -->
+                                <g id="collarSvgGroup">
+                                    <!-- Solid Brass Sleeve Body -->
+                                    <rect x="65" y="85" width="70" height="70" rx="4" fill="url(#brassGrad)" stroke="#78350f" stroke-width="2"/>
+                                    <!-- Collar Ridge Lines -->
+                                    <line id="s2Ridge1" x1="72" y1="85" x2="72" y2="155" stroke="#92400e" stroke-width="2"/>
+                                    <line id="s2Ridge2" x1="128" y1="85" x2="128" y2="155" stroke="#92400e" stroke-width="2"/>
+                                    <!-- Cutout Hole on the Collar itself -->
+                                    <rect id="collarHoleRect" x="85" y="95" width="30" height="50" rx="2" fill="#020617" stroke="#78350f" stroke-width="1.5"/>
+                                </g>
+
+                                <defs>
+                                    <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#475569"/>
+                                        <stop offset="50%" stop-color="#cbd5e1"/>
+                                        <stop offset="100%" stop-color="#334155"/>
+                                    </linearGradient>
+                                    <linearGradient id="brassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#b45309"/>
+                                        <stop offset="50%" stop-color="#fde047"/>
+                                        <stop offset="100%" stop-color="#78350f"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+
+                            <div class="mt-2 text-center">
+                                <span id="airHoleStatusText" class="text-sm font-bold font-mono text-amber-400">
+                                    氣孔: 打開 (100%)
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Collar Controls -->
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 flex flex-col justify-center space-y-6">
+                            <div>
+                                <h3 id="s2InstructionTitle" class="text-base font-bold text-white mb-1">旋轉氣孔調節環</h3>
+                                <p id="s2InstructionBody" class="text-xs text-slate-300 leading-relaxed">
+                                    點燃本生燈之前，氣孔<strong>必須完全關閉</strong>。請向左拖動黃銅套筒旋轉，直到氣孔完全被金屬遮蓋。
+                                </p>
+                            </div>
+
+                            <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80 text-center">
+                                <p id="s2DragTip" class="text-xs text-amber-300 font-medium flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-arrows-left-right text-brand-400"></i> 向左拖動套筒進行關閉
+                                </p>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button id="s2BtnClose" onclick="setCollarAngle(0)" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-emerald-400 transition">
+                                    旋轉至關閉 (0%)
+                                </button>
+                                <button id="s2BtnOpen" onclick="setCollarAngle(100)" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-amber-400 transition">
+                                    旋轉至打開 (100%)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= SCREEN 3: GAS LIGHTER & IGNITION ================= -->
+                <div id="screen3" class="lab-screen w-full hidden flex-col items-center justify-center">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center w-full max-w-4xl">
+                        
+                        <div class="relative bg-slate-900/90 p-6 rounded-2xl border border-slate-800 flex flex-col items-center justify-center min-h-[300px]">
+                            <canvas id="sparkCanvas" class="absolute inset-0 pointer-events-none z-20" width="400" height="300"></canvas>
+
+                            <svg class="w-72 h-72 z-10" viewBox="0 0 250 250">
+                                <g id="safetyFlameGroup" class="hidden">
+                                    <path class="animate-flicker glow-yellow" d="M 125 15 C 105 40, 100 80, 125 105 C 150 80, 145 40, 125 15 Z" fill="url(#yellowFlameGrad)"/>
+                                </g>
+
+                                <g id="lighterSparkFlame" class="hidden animate-flicker">
+                                    <path d="M 138 108 L 168 138" stroke="#94a3b8" stroke-width="5" stroke-linecap="round"/>
+                                    <path d="M 125 60 C 116 78, 114 95, 125 105 C 136 95, 134 78, 125 60 Z" fill="url(#yellowFlameGrad)" class="glow-yellow"/>
+                                    <path d="M 125 75 C 119 84, 118 94, 125 102 C 132 94, 131 84, 125 75 Z" fill="#00d4ff"/>
+                                </g>
+
+                                <rect x="113" y="105" width="24" height="80" fill="url(#metalGrad)"/>
+                                <rect x="110" y="155" width="30" height="20" rx="2" fill="url(#brassGrad)"/>
+                                <rect x="118" y="160" width="14" height="10" fill="#0f172a"/>
+
+                                <ellipse cx="125" cy="220" rx="45" ry="12" fill="#334155"/>
+                                <rect x="105" y="185" width="40" height="30" rx="3" fill="#1e293b"/>
+
+                                <path d="M 110 200 C 60 200, 40 210, 20 210" fill="none" stroke="#dc2626" stroke-width="8" stroke-linecap="round"/>
+
+                                <g id="gasTapGroup" onclick="handleGasTapClick()" class="cursor-pointer group">
+                                    <rect x="5" y="195" width="25" height="30" fill="#475569" rx="3"/>
+                                    <rect id="gasValveHandle" x="-5" y="190" width="45" height="10" rx="4" fill="#ef4444" class="transition-transform duration-300 origin-[17px_195px] group-hover:brightness-110"/>
+                                    <text x="5" y="240" fill="#94a3b8" font-size="10" font-family="monospace">GAS TAP</text>
+                                </g>
+
+                                <defs>
+                                    <linearGradient id="yellowFlameGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                        <stop offset="0%" stop-color="#ff4500" stop-opacity="0.9"/>
+                                        <stop offset="50%" stop-color="#ffa500" stop-opacity="0.95"/>
+                                        <stop offset="100%" stop-color="#ffee00" stop-opacity="0.8"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+
+                            <div class="mt-2 flex gap-4 text-xs font-mono">
+                                <span id="lighterStatusBadge" class="px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+                                    點火槍: 就緒
+                                </span>
+                                <span id="gasTapStatusBadge" class="px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+                                    煤氣閥門: 關閉
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-6">
+                            <div>
+                                <h3 id="s3ProcedureTitle" class="text-base font-bold text-white mb-1">點火順序規程</h3>
+                                <p id="s3ProcedureBody" class="text-xs text-slate-300 leading-relaxed">
+                                    <strong>安全規則：</strong>您必須<strong>先觸發點火槍</strong>，使燈管上方產生有效火花（持續3秒），<em>然後</em>再打開煤氣閥門！
+                                </p>
+                            </div>
+
+                            <div class="space-y-3">
+                                <button id="triggerLighterBtn" onclick="triggerLighterSpark()" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-sm shadow-lg shadow-orange-500/20 transition flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-fire-burner"></i>
+                                    <span id="s3BtnTriggerText">1. 觸發點火槍火花 (3秒有效)</span>
+                                </button>
+
+                                <button id="turnGasTapBtn" onclick="handleGasTapClick()" class="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold text-sm transition flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-gauge-high"></i>
+                                    <span id="s3BtnGasText">2. 打開煤氣閥門</span>
+                                </button>
+                            </div>
+
+                            <div id="screen3Tip" class="p-3 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-300 text-xs">
+                                <i class="fa-solid fa-circle-info mr-1"></i>
+                                <span id="s3TipText">如果在沒有激活點火火花的情況下直接打開煤氣，會導致可燃氣體在空氣中積聚，產生爆燃危險！</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= SCREEN 4: FLAME CONTROL & STRIKE BACK ================= -->
+                <div id="screen4" class="lab-screen w-full hidden flex-col items-center justify-center">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center w-full max-w-4xl">
+                        
+                        <div class="relative bg-slate-900/90 p-6 rounded-2xl border border-slate-800 flex flex-col items-center justify-center min-h-[340px]">
+                            
+                            <svg class="w-72 h-80 z-10" viewBox="0 0 250 280">
+                                <!-- Outer Flame & Inner Flame Cone with Dynamic Colors -->
+                                <g id="s4FlameGroup" class="animate-irregular-flicker glow-yellow">
+                                    <path id="outerFlamePath" d="M 125 15 C 105 40, 100 80, 125 105 C 150 80, 145 40, 125 15 Z" fill="url(#s4DynamicFlameGrad)"/>
+                                    <path id="innerFlamePath" d="M 125 65 C 115 80, 112 100, 125 105 C 138 100, 135 80, 125 65 Z" fill="url(#blueInnerGrad)" opacity="0"/>
+                                </g>
+
+                                <rect x="113" y="105" width="24" height="80" fill="url(#metalGrad)"/>
+                                
+                                <g>
+                                    <rect x="110" y="155" width="30" height="20" rx="2" fill="url(#brassGrad)"/>
+                                    <rect id="s4AirHole" x="118" y="160" width="0" height="10" fill="#0f172a"/>
+                                </g>
+
+                                <ellipse cx="125" cy="220" rx="45" ry="12" fill="#334155"/>
+                                <rect x="105" y="185" width="40" height="30" rx="3" fill="#1e293b"/>
+                                <path d="M 110 200 C 60 200, 40 210, 20 210" fill="none" stroke="#dc2626" stroke-width="8" stroke-linecap="round"/>
+
+                                <rect x="5" y="195" width="25" height="30" fill="#475569" rx="3"/>
+                                <rect x="-5" y="190" width="45" height="10" rx="4" fill="#ef4444" transform="rotate(-90)" class="origin-[17px_195px]"/>
+
+                                <defs>
+                                    <!-- Dynamic Gradient for Flame Interpolation -->
+                                    <linearGradient id="s4DynamicFlameGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                        <stop id="s4GradStop0" offset="0%" stop-color="#ff4500" stop-opacity="0.95"/>
+                                        <stop id="s4GradStop50" offset="50%" stop-color="#ffa500" stop-opacity="0.95"/>
+                                        <stop id="s4GradStop100" offset="100%" stop-color="#ffee00" stop-opacity="0.85"/>
+                                    </linearGradient>
+                                    <linearGradient id="blueOuterGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                        <stop offset="0%" stop-color="#0022aa" stop-opacity="0.9"/>
+                                        <stop offset="60%" stop-color="#0066ff" stop-opacity="0.8"/>
+                                        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.4"/>
+                                    </linearGradient>
+                                    <linearGradient id="blueInnerGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                        <stop offset="0%" stop-color="#00f0ff" stop-opacity="1"/>
+                                        <stop offset="100%" stop-color="#a5f3fc" stop-opacity="0.9"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+
+                            <div class="mt-2 text-center">
+                                <span id="s4FlameTypeTag" class="text-xs font-bold font-mono px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    黃色安全焰（明亮且不穩定）
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-5">
+                            <div>
+                                <h3 id="s4ControlTitle" class="text-base font-bold text-white mb-1">調節氣孔套筒</h3>
+                                <p id="s4ControlDesc" class="text-xs text-slate-300 leading-relaxed">
+                                    拖動下方滑塊調節氣孔開度。空氣混合比例增加時，火焰顏色、形狀與溫度將連續變化。將氣孔調至 <strong>50% - 80%</strong> 以獲得高效咆哮藍焰。
+                                </p>
+                            </div>
+
+                            <div class="space-y-2">
+                                <div class="flex justify-between text-xs font-mono">
+                                    <span id="s4Slider0" class="text-amber-400">0% (關閉)</span>
+                                    <span id="s4Slider50" class="text-cyan-400">50%-80% (咆哮藍焰)</span>
+                                    <span id="s4Slider100" class="text-rose-400">100% (回火)</span>
+                                </div>
+                                <input id="airHoleSlider4" type="range" min="0" max="100" value="0" oninput="handleStep4CollarChange(this.value)" class="w-full h-3 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-500">
+                                <div class="text-right text-xs font-mono text-brand-300 font-bold" id="s4AirHoleDisplay">
+                                    氣孔開度: 0%
+                                </div>
+                            </div>
+
+                            <div id="flamePhysicsCard" class="p-3.5 bg-slate-800/80 rounded-xl border border-slate-700 text-xs space-y-2">
+                                <div class="flex justify-between items-center text-slate-300 font-mono">
+                                    <span id="s4TempLabel">預估溫度:</span>
+                                    <span id="tempReadout" class="font-bold text-amber-400 text-sm">300°C</span>
+                                </div>
+                                <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                                    <div id="tempProgressBar" class="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-cyan-400 transition-all duration-150" style="width: 0%"></div>
+                                </div>
+                                <div class="flex justify-between text-slate-300 font-mono pt-1">
+                                    <span id="s4CombustionLabel">燃燒狀態:</span>
+                                    <span id="combustionTypeReadout" class="font-bold text-amber-300">不完全燃燒（產生炭黑）</span>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <button id="s4Btn0" onclick="setStep4Collar(0)" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-amber-300 transition">
+                                    0% (黃色安全焰)
+                                </button>
+                                <button id="s4Btn50" onclick="setStep4Collar(50)" class="flex-1 py-2 rounded-xl bg-brand-600/30 hover:bg-brand-600/50 border border-brand-500/40 text-xs font-bold text-cyan-300 transition">
+                                    50% (咆哮藍焰)
+                                </button>
+                                <button id="s4Btn100" onclick="setStep4Collar(100)" class="flex-1 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/40 text-xs font-bold text-rose-300 transition">
+                                    100% (測試回火)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ================= SCREEN 5: SAFE SHUTDOWN PROCEDURE ================= -->
+                <div id="screen5" class="lab-screen w-full hidden flex-col items-center justify-center">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center w-full max-w-4xl">
+                        
+                        <div class="relative bg-slate-900/90 p-5 rounded-2xl border border-slate-800 flex flex-col items-center justify-center min-h-[360px]">
+                            
+                            <!-- Close-Up Zoom Box for Step 5 Air Hole Collar -->
+                            <div class="w-full bg-slate-950/80 p-3 rounded-xl border border-amber-500/30 mb-3 flex flex-col items-center shadow-inner">
+                                <span id="s5ZoomLabel" class="text-[11px] font-mono font-bold text-amber-400 tracking-wider flex items-center gap-1">
+                                    <i class="fa-solid fa-magnifying-glass font-bold text-amber-400"></i> 特寫：氣孔調節環（拖動旋轉）
+                                </span>
+                                
+                                <svg id="s5CollarSvg" class="w-52 h-24 mt-1 cursor-ew-resize select-none touch-none hover:brightness-110 transition-all active:scale-95" viewBox="0 0 160 80">
+                                    <rect x="55" y="0" width="50" height="25" fill="url(#metalGrad)"/>
+                                    <rect x="55" y="55" width="50" height="25" fill="url(#metalGrad)"/>
+                                    <rect x="65" y="25" width="30" height="30" fill="#020617"/>
+                                    
+                                    <g id="s5CollarZoomGroup">
+                                        <rect x="45" y="20" width="70" height="40" rx="3" fill="url(#brassGrad)" stroke="#78350f" stroke-width="2"/>
+                                        <line id="s5Ridge1" x1="52" y1="20" x2="52" y2="60" stroke="#92400e" stroke-width="2"/>
+                                        <line id="s5Ridge2" x1="108" y1="20" x2="108" y2="60" stroke="#92400e" stroke-width="2"/>
+                                        <rect id="s5CollarZoomRect" x="65" y="25" width="16" height="30" rx="2" fill="#020617" stroke="#78350f" stroke-width="1"/>
+                                    </g>
+                                </svg>
+
+                                <div class="flex items-center justify-between w-full px-2 mt-1">
+                                    <span id="s5AirHoleZoomStatus" class="text-xs font-bold font-mono text-amber-400">
+                                        氣孔: 打開 (50% / 45°)
+                                    </span>
+                                    <span id="s5DragTip" class="text-[10px] text-amber-300/80 font-mono flex items-center gap-1">
+                                        <i class="fa-solid fa-arrows-left-right text-xs"></i> 拖動套筒旋轉至 0° (關閉)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <svg class="w-64 h-64 z-10" viewBox="0 0 250 250">
+                                <g id="s5FlameGroup" class="animate-flicker glow-blue">
+                                    <path id="s5OuterFlamePath" d="M 125 15 C 105 40, 100 90, 125 115 C 150 90, 145 40, 125 15 Z" fill="url(#blueOuterGrad)"/>
+                                    <path id="s5InnerFlamePath" d="M 125 55 C 115 75, 112 100, 125 115 C 138 100, 135 75, 125 55 Z" fill="url(#blueInnerGrad)"/>
+                                </g>
+
+                                <rect x="113" y="115" width="24" height="80" fill="url(#metalGrad)"/>
+                                
+                                <g>
+                                    <rect x="110" y="165" width="30" height="20" rx="2" fill="url(#brassGrad)"/>
+                                    <rect id="s5AirHole" x="118" y="170" width="7" height="10" fill="#0f172a"/>
+                                </g>
+
+                                <ellipse cx="125" cy="230" rx="45" ry="12" fill="#334155"/>
+                                <rect x="105" y="195" width="40" height="30" rx="3" fill="#1e293b"/>
+                                <path d="M 110 210 C 60 210, 40 220, 20 220" fill="none" stroke="#dc2626" stroke-width="8" stroke-linecap="round"/>
+
+                                <g onclick="handleStep5GasTap()" class="cursor-pointer group">
+                                    <rect x="5" y="205" width="25" height="30" fill="#475569" rx="3"/>
+                                    <rect id="s5GasValveHandle" x="-5" y="200" width="45" height="10" rx="4" fill="#ef4444" transform="rotate(-90)" class="transition-transform duration-300 origin-[17px_205px] group-hover:brightness-110"/>
+                                    <text x="5" y="250" fill="#94a3b8" font-size="10" font-family="monospace">GAS TAP</text>
+                                </g>
+                            </svg>
+
+                            <div class="mt-2 flex gap-3 text-xs font-mono">
+                                <span id="s5AirHoleBadge" class="px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                                    氣孔: 50% 打開
+                                </span>
+                                <span id="s5GasTapBadge" class="px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                                    煤氣閥門: 開啟
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900/60 p-6 rounded-2xl border border-slate-800 space-y-5">
+                            <div>
+                                <h3 id="s5ShutdownTitle" class="text-base font-bold text-white mb-1">關氣安全程序</h3>
+                                <p id="s5ShutdownDesc" class="text-xs text-slate-300 leading-relaxed">
+                                    請遵守安全規程：<strong>首先</strong>旋轉氣孔套筒至 <strong>0° / 0% (關閉)</strong> 恢復為黃色安全焰；<strong>其次</strong>關閉主煤氣閥門。
+                                </p>
+                            </div>
+
+                            <div class="space-y-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                                <div class="flex justify-between items-center text-xs font-bold text-brand-300">
+                                    <span id="s5CollarStepTitle">1. 旋轉氣孔套筒</span>
+                                    <span id="s5SliderValText" class="text-amber-400 font-mono">50% 半開 (45°)</span>
+                                </div>
+                                <div class="p-2.5 bg-slate-900/80 rounded-lg border border-slate-700 text-center">
+                                    <p id="s5CollarDragHint" class="text-xs text-amber-300/90 font-medium flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-arrows-left-right text-brand-400"></i> 向左拖動套筒旋轉至 0° (關閉)
+                                    </p>
+                                </div>
+                                <div class="flex gap-2 pt-1">
+                                    <button id="s5Btn0" onclick="setStep5Collar(0)" class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[11px] text-emerald-400 font-bold transition">
+                                        旋轉至 0° (關閉)
+                                    </button>
+                                    <button id="s5Btn45" onclick="setStep5Collar(50)" class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[11px] text-amber-300 font-bold transition">
+                                        旋轉至 45° (半開)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="space-y-2 bg-slate-800/50 p-3 rounded-xl border border-slate-700/60">
+                                <label id="s5GasLabel" class="text-xs font-bold text-brand-300 block">2. 主煤氣閥門</label>
+                                <button id="turnGasTapBtn5" onclick="handleStep5GasTap()" class="w-full py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm shadow-lg transition flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-power-off"></i>
+                                    <span id="s5BtnGasOffText">關閉煤氣閥門</span>
+                                </button>
+                            </div>
+
+                            <div id="s5TipCard" class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                                <i class="fa-solid fa-circle-info mr-1"></i>
+                                <span id="s5TipText">請先將氣孔調節環關閉至 0% (0°)，然後再關閉煤氣閥門。</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Navigation Footer -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 mt-4 flex items-center justify-between z-10">
+                <button id="prevStepBtn" onclick="navigateStep(-1)" disabled class="px-4 py-2 rounded-xl bg-slate-800 opacity-50 text-slate-400 text-xs font-semibold flex items-center gap-2 cursor-not-allowed transition">
+                    <i class="fa-solid fa-arrow-left"></i> <span id="prevBtnText">上一步</span>
+                </button>
+
+                <div class="text-xs text-slate-400 font-mono hidden sm:block">
+                    <span id="footerStepText">步驟</span> <span id="currentStepNum" class="text-brand-400 font-bold">1</span> <span id="footerStepOf">共 5 步</span>
+                </div>
+
+                <button id="nextStepBtn" onclick="navigateStep(1)" disabled class="px-5 py-2.5 rounded-xl bg-brand-600 opacity-50 text-white text-xs font-bold flex items-center gap-2 cursor-not-allowed transition shadow-lg">
+                    <span id="nextBtnText">下一步</span> <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Teacher Notes & Pedagogy Modal -->
+    <div id="pedagogyModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onclick="togglePedagogyModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-book-open"></i>
+                </div>
+                <div>
+                    <h3 id="pedagogyModalTitle" class="text-lg font-bold text-white">物理學與教學大綱說明</h3>
+                    <p id="pedagogyModalSubtitle" class="text-xs text-slate-400">本生燈熱力學與安全概念</p>
+                </div>
+            </div>
+
+            <div class="space-y-4 text-xs text-slate-300 leading-relaxed">
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60">
+                    <h4 id="p1Title" class="font-bold text-brand-400 mb-1"><i class="fa-solid fa-glasses mr-1"></i> 1. 眼睛安全防護 (步驟 1)</h4>
+                    <p id="p1Text">實驗室安全規程要求在點燃任何氣體設備之前必須佩戴符合 EN166 標準的防護護目鏡，以防止熱灼傷、氣體爆燃和化學品濺射。</p>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60">
+                    <h4 id="p2Title" class="font-bold text-amber-400 mb-1"><i class="fa-solid fa-rotate mr-1"></i> 2. 調節環與明亮黃色火焰 (步驟 2 & 4)</h4>
+                    <p id="p2Text">當氣孔完全關閉（0%）時，氣體在燈管內不與空氣混合，僅在燈管頂部利用周圍大氣中的氧氣燃燒（不完全燃燒）。未燃燒的碳微粒（炭黑）受熱發光，形成不穩定、較亮且有噪音的黃色火焰（~300°C-500°C）。</p>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60">
+                    <h4 id="p3Title" class="font-bold text-orange-400 mb-1"><i class="fa-solid fa-fire mr-1"></i> 3. 先點火後開氣規則 (步驟 3)</h4>
+                    <p id="p3Text">必須先觸發點火槍在燈管上方產生火花，然後再打開煤氣閥門。若先開氣，易燃的甲烷氣體會迅速在空氣中積聚，造成爆燃隱患。</p>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60">
+                    <h4 id="p4Title" class="font-bold text-cyan-400 mb-1"><i class="fa-solid fa-sliders mr-1"></i> 4. 非明亮咆哮藍焰與回火 (步驟 4)</h4>
+                    <p id="p4Text">將氣孔打開至約 50%-80% 可吸入空氣（伯努利原理），實現完全燃燒並產生咆哮的雙層藍色加熱焰（最高達 ~1500°C）。若將氣孔完全打開（100%），空氣流速將超過甲烷的燃燒傳播速度，導致火焰向燈管內部倒燒並在噴嘴處燃燒，即發生「回火」。</p>
+                </div>
+                <div class="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60">
+                    <h4 id="p5Title" class="font-bold text-emerald-400 mb-1"><i class="fa-solid fa-power-off mr-1"></i> 5. 安全關氣順序 (步驟 5)</h4>
+                    <p id="p5Text">關氣前務必先關閉氣孔，使高溫藍焰降溫並恢復為醒目的黃色安全焰，便於直觀確認火焰狀態並在較低溫度下關閉煤氣源。</p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button id="modalCloseBtn" onclick="togglePedagogyModal()" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs transition">
+                    明白了，返回實驗室
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-emerald-500 rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl transform transition-all scale-100">
+            <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4 border border-emerald-500/40">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <h3 id="successModalTitle" class="text-2xl font-extrabold text-white mb-2">太棒了！</h3>
+            <p id="successModalMsg" class="text-xs text-slate-300 mb-6">
+                您已成功完成此步驟！
+            </p>
+            <button id="successModalBtn" onclick="closeSuccessModalAndProceed()" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2">
+                <span id="succProceedText">繼續下一步</span> <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Strike Back Explosion Modal -->
+    <div id="strikeBackModal" class="fixed inset-0 bg-rose-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl">
+            <div class="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4 border border-rose-500/40 animate-bounce">
+                <i class="fa-solid fa-explosion"></i>
+            </div>
+            <h3 id="sbTitle" class="text-2xl font-extrabold text-rose-400 mb-2">💥 發生了回火！</h3>
+            <p id="sbBody" class="text-xs text-slate-300 mb-4 leading-relaxed">
+                氣孔被打開到了 100%！氣體混合流速過高，火焰向下蔓延至金屬燈管內部，並在底部的噴嘴處直接燃燒。本生燈發生了回火！
+            </p>
+            <div class="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-[11px] text-rose-300 text-left mb-6">
+                <strong id="sbEmergencyTitle">應急處理程序：</strong>
+                <ul class="list-disc list-inside mt-1 space-y-1">
+                    <li id="sbEmergency1">立即關閉煤氣閥門，防止燈管過熱損壞。</li>
+                    <li id="sbEmergency2">切勿觸碰燈管（極其燙手！）。</li>
+                    <li id="sbEmergency3">重新點火前需先關閉氣孔。</li>
+                </ul>
+            </div>
+            <button id="sbRetryBtn" onclick="resetStep4AfterExplosion()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-left"></i> <span id="sbRetryText">關閉煤氣並重試步驟 4</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Safety Warning Modal -->
+    <div id="warningModal" class="fixed inset-0 bg-amber-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl">
+            <div class="w-16 h-16 bg-amber-500/20 text-amber-500 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4 border border-amber-500/40">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="warnTitle" class="text-2xl font-extrabold text-amber-400 mb-2">⚠️ 安全警告：操作順序錯誤！</h3>
+            <p id="warnBody" class="text-xs text-slate-300 mb-6 leading-relaxed">
+                在沒有點燃點火槍火花的情況下打開煤氣閥門是非常危險的！未點燃的甲烷氣體會在空氣中迅速積聚，隨時可能引發爆燃。
+            </p>
+            <button onclick="closeWarningModal()" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-amber-500/20 font-bold">
+                <span id="warnOkText">我知道了，關閉煤氣並重新操作</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Step 5 Gas Safety Modal (Replaces browser alert) -->
+    <div id="step5AlertModal" class="fixed inset-0 bg-amber-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-amber-500 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl">
+            <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-4 border border-amber-500/40">
+                <i class="fa-solid fa-hand"></i>
+            </div>
+            <h3 id="s5AlertTitle" class="text-xl font-extrabold text-amber-400 mb-2">請先關閉氣孔！</h3>
+            <p id="s5AlertBody" class="text-xs text-slate-300 mb-6 leading-relaxed">
+                為確保安全，請先將氣孔調節環旋轉至 0% (恢復黃色安全焰)，然後再關閉煤氣閥門！
+            </p>
+            <button onclick="closeStep5AlertModal()" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-amber-500/20 font-bold">
+                <span id="s5AlertOkBtn">明白，先關閉氣孔</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        let isAudioMuted = false;
+        let currentLanguage = 'zh'; // 'zh' = Traditional Chinese, 'en' = English
+
+        // State trackers
+        let gogglesEquipped = false;
+        let step2AirHolePercent = 100;
+        let lighterSparkActive = false;
+        let lighterSparkTimer = null;
+        let step3GasTapOpen = false;
+        let step4CollarPercent = 0;
+        let step5CollarPercent = 50;
+        let step5GasTapOpen = true;
+
+        // Step completion status
+        let stepCompleted = [false, false, false, false, false];
+
+        // I18n Translations Dictionary (Traditional Chinese & English)
+        const i18n = {
+            zh: {
+                headerSub: "科學互動模擬器 • 本生燈安全與操作模組",
+                langBtn: "English",
+                soundOn: "聲音 開啟",
+                soundOff: "聲音 關閉",
+                pedagogyBtn: "教師說明與物理原理",
+                resetBtn: "重置實驗室",
+                prevBtn: "上一步",
+                nextBtn: "下一步",
+                loopToStep1Btn: "返回步驟 1",
+                stepText: "步驟",
+                stepOf: "共 5 步",
+                statusNeedOp: "需要操作",
+                statusDone: "步驟完成",
+                
+                // Step Pills
+                pills: [
+                    { title: "眼防護", sub: "佩戴護目鏡" },
+                    { title: "調節氣孔", sub: "關閉氣孔" },
+                    { title: "點火操作", sub: "先點火後開氣" },
+                    { title: "火焰控制", sub: "調節與原理" },
+                    { title: "安全關氣", sub: "關氣孔後關氣源" }
+                ],
+
+                // Step Instructions
+                instructions: [
+                    { title: "步驟 1 任務", text: "安全第一！在開始實驗之前，請點擊或拖動護目鏡戴在學生臉上以確保安全。" },
+                    { title: "步驟 2 任務", text: "點燃本生燈前，氣孔必須完全關閉！請向左拖動黃銅套筒將氣孔旋轉至 0% (關閉)。" },
+                    { title: "步驟 3 任務", text: "遵循「先點火後開氣」原則！先觸發點火槍產生火花，然後在3秒內打開煤氣閥門。" },
+                    { title: "步驟 4 任務", text: "拖動滑塊連續調節氣孔。觀察火焰顏色、形狀與溫度的動態變化（調至 50%-80% 獲得咆哮藍焰）。" },
+                    { title: "步驟 5 任務", text: "安全關氣順序：首先將氣孔旋轉至 0%（恢復黃色安全焰），然後關閉煤氣閥門。" }
+                ],
+
+                // Screen 1
+                s1BenchTitle: "安全裝備實驗台",
+                s1TargetLabel: "護目鏡佩戴目標區",
+                s1ClickWear: "點擊佩戴護目鏡",
+                s1Note: "在操作本生燈火焰前，請務必佩戴符合 EN166 標準的防護護目鏡。",
+
+                // Screen 2
+                s2CloseUp: "特寫：氣孔調節環（左右拖動旋轉）",
+                s2Title: "旋轉氣孔調節環",
+                s2Body: "點燃本生燈之前，氣孔必須完全關閉。請向左拖動黃銅套筒旋轉，直到氣孔完全被金屬遮蓋。",
+                s2Tip: "向左拖動套筒進行關閉",
+                s2BtnClose: "旋轉至關閉 (0%)",
+                s2BtnOpen: "旋轉至打開 (100%)",
+                airHoleClosed: "氣孔: 關閉 (0%)",
+                airHoleOpen: "氣孔: 打開",
+
+                // Screen 3
+                s3Title: "點火順序規程",
+                s3Body: "安全規則：您必須先觸發點火槍，使燈管上方產生有效火花（持續3秒），然後再打開煤氣閥門！",
+                s3TriggerBtn: "1. 觸發點火槍火花 (3秒有效)",
+                s3GasBtn: "2. 打開煤氣閥門",
+                s3Tip: "如果在沒有激活點火火花的情況下直接打開煤氣，會導致可燃氣體在空氣中積聚，產生爆燃危險！",
+                lighterReady: "點火槍: 就緒",
+                lighterActive: "點火槍: 發射火花中...",
+                gasClosed: "煤氣閥門: 關閉",
+                gasOpen: "煤氣閥門: 開啟",
+
+                // Screen 4
+                s4Title: "調節氣孔套筒",
+                s4Body: "拖動下方滑塊調節氣孔開度。空氣混合比例增加時，火焰顏色、形狀與溫度將連續變化。將氣孔調至 <strong>50% - 80%</strong> 以獲得高效咆哮藍焰。",
+                s4YellowTag: "黃色安全焰（明亮且不穩定）",
+                s4TransTag: "混合過渡焰（溫度上升中）",
+                s4BlueTag: "咆哮藍焰（高溫雙層加熱焰）",
+                s4ExcessTag: "強烈咆哮藍焰（接近回火臨界）",
+                s4TempLabel: "預估溫度:",
+                s4CombustionLabel: "燃燒狀態:",
+                s4CombYellow: "不完全燃燒（產生炭黑，熱效率低）",
+                s4CombTrans: "部分不完全燃燒（黃藍混合）",
+                s4CombBlue: "完全燃燒（無炭黑，最高熱效率）",
+                s4CombExcess: "過量空氣燃燒（火焰振動加劇）",
+
+                // Screen 5
+                s5Title: "關氣安全程序",
+                s5Body: "請遵守安全規程：首先旋轉氣孔套筒至 0° / 0% (關閉) 恢復為黃色安全焰；其次關閉主煤氣閥門。",
+                s5CollarStep: "1. 旋轉氣孔套筒",
+                s5DragHint: "向左拖動套筒旋轉至 0° (關閉)",
+                s5GasLabel: "2. 主煤氣閥門",
+                s5GasOffBtn: "關閉煤氣閥門",
+                s5Tip: "請先將氣孔調節環關閉至 0% (0°)，然後再關閉煤氣閥門。",
+                s5AirHoleZoom: "特寫：氣孔調節環（拖動旋轉）",
+
+                // Modals
+                pedagogyTitle: "物理學與教學大綱說明",
+                pedagogySub: "本生燈熱力學與安全概念",
+                succTitle: "太棒了！",
+                succMsg: "您已成功完成此步驟！",
+                succBtn: "繼續下一步",
+                succTitle5: "恭喜完成全套實驗！",
+                succMsg5: "您已成功掌握本生燈的安全操作與火焰調節技巧！點擊下方按鈕將返回步驟 1 重新練習。",
+                succBtn5: "返回步驟 1 重新開始",
+                sbTitle: "💥 發生了回火！",
+                sbBody: "氣孔被打開到了 100%！氣體混合流速過高，火焰向下蔓延至金屬燈管內部，並在底部的噴嘴處直接燃燒。本生燈發生了回火！",
+                sbEmergencyTitle: "應急處理程序：",
+                sbEmergency1: "立即關閉煤氣閥門，防止燈管過熱損壞。",
+                sbEmergency2: "切勿觸碰燈管（極其燙手！）。",
+                sbEmergency3: "重新點火前需先關閉氣孔。",
+                sbRetryBtn: "關閉煤氣並重試步驟 4",
+                warnTitle: "⚠️ 安全警告：操作順序錯誤！",
+                warnBody: "在沒有點燃點火槍火花的情況下打開煤氣閥門是非常危險的！未點燃的甲烷氣體會在空氣中迅速積聚，隨時可能引發爆燃。",
+                warnOkBtn: "我知道了，關閉煤氣並重新操作",
+                s5AlertTitleText: "請先關閉氣孔！",
+                s5AlertBodyText: "為確保安全，請先將氣孔調節環旋轉至 0% (恢復黃色安全焰)，然後再關閉煤氣閥門！",
+                s5AlertOkBtnText: "明白，先關閉氣孔"
+            },
+            en: {
+                headerSub: "Interactive Science Simulator • Bunsen Burner Safety & Operation",
+                langBtn: "繁體中文",
+                soundOn: "Audio On",
+                soundOff: "Audio Muted",
+                pedagogyBtn: "Pedagogy & Physics Notes",
+                resetBtn: "Reset Lab",
+                prevBtn: "Previous",
+                nextBtn: "Next",
+                loopToStep1Btn: "Return to Step 1",
+                stepText: "Step",
+                stepOf: "of 5",
+                statusNeedOp: "Action Required",
+                statusDone: "Step Completed",
+                
+                pills: [
+                    { title: "Eye Protection", sub: "Wear Goggles" },
+                    { title: "Air Hole", sub: "Close Hole" },
+                    { title: "Ignition", sub: "Spark Before Gas" },
+                    { title: "Flame Control", sub: "Color & Temp" },
+                    { title: "Safe Shutdown", sub: "Hole First, Gas Next" }
+                ],
+
+                instructions: [
+                    { title: "Step 1 Task", text: "Safety first! Drag or click the safety goggles onto the student before starting." },
+                    { title: "Step 2 Task", text: "Close the air hole completely before lighting! Drag brass collar left to 0%." },
+                    { title: "Step 3 Task", text: "Follow 'Spark Before Gas'! Trigger the lighter spark, then turn on gas within 3s." },
+                    { title: "Step 4 Task", text: "Drag the slider to continuously adjust the air hole. Observe flame color, structure, and temperature changes." },
+                    { title: "Step 5 Task", text: "Safe shutdown: First rotate air hole left to 0% (safety flame), then close gas tap." }
+                ],
+
+                s1BenchTitle: "Safety Equipment Bench",
+                s1TargetLabel: "Goggles Drop Zone",
+                s1ClickWear: "Click to Wear Goggles",
+                s1Note: "Always wear EN166 compliant safety goggles before operating gas burners.",
+
+                s2CloseUp: "Zoom: Air Hole Collar (Drag left/right to rotate)",
+                s2Title: "Rotate Collar to Close Air Hole",
+                s2Body: "The air hole MUST be fully closed before lighting. Drag the brass collar left until closed.",
+                s2Tip: "Drag collar left to close",
+                s2BtnClose: "Rotate to Closed (0%)",
+                s2BtnOpen: "Rotate to Open (100%)",
+                airHoleClosed: "Air Hole: CLOSED (0%)",
+                airHoleOpen: "Air Hole: OPEN",
+
+                s3Title: "Ignition Sequence Rule",
+                s3Body: "Safety Rule: You MUST trigger the lighter spark first (3s active window), THEN open gas tap!",
+                s3TriggerBtn: "1. Trigger Lighter Spark (3s Active)",
+                s3GasBtn: "2. Turn On Gas Tap",
+                s3Tip: "Opening gas before sparking causes flammable gas accumulation and dangerous flare-ups!",
+                lighterReady: "Lighter: Ready",
+                lighterActive: "Lighter: Sparking...",
+                gasClosed: "Gas Tap: Closed",
+                gasOpen: "Gas Tap: Open",
+
+                s4Title: "Adjust Collar Opening",
+                s4Body: "Drag the slider to adjust the air hole. As oxygen mixes in, the flame color, double cone structure, and temperature continuously shift.",
+                s4YellowTag: "Yellow Safety Flame (Luminous & Sooty)",
+                s4TransTag: "Transition Flame (Warming Up)",
+                s4BlueTag: "Roaring Blue Flame (Non-Luminous Heating)",
+                s4ExcessTag: "Intense Roaring Blue (Near Strike-Back)",
+                s4TempLabel: "Estimated Temp:",
+                s4CombustionLabel: "Combustion State:",
+                s4CombYellow: "Incomplete Combustion (Sooting, ~300°C)",
+                s4CombTrans: "Partial Combustion (Transitioning)",
+                s4CombBlue: "Complete Combustion (Efficient Heat, ~1500°C)",
+                s4CombExcess: "Excess Air Combustion (Vibrating Flame)",
+
+                s5Title: "Shutdown Procedure",
+                s5Body: "Follow safety order: FIRST rotate collar left to 0% (return to safety flame); SECOND turn off main gas tap.",
+                s5CollarStep: "1. Rotate Air Collar",
+                s5DragHint: "Drag collar left to 0° (Closed)",
+                s5GasLabel: "2. Main Gas Valve",
+                s5GasOffBtn: "Turn Off Gas Tap",
+                s5Tip: "Please close air hole to 0% (0°) before turning off the gas valve.",
+                s5AirHoleZoom: "Zoom: Collar Air Hole (Drag to rotate)",
+
+                pedagogyTitle: "Physics & Curriculum Syllabus Notes",
+                pedagogySub: "Bunsen Burner Thermodynamics & Safety Principles",
+                succTitle: "Great Job!",
+                succMsg: "You have completed this step successfully!",
+                succBtn: "Proceed to Next Step",
+                succTitle5: "Lab Completed!",
+                succMsg5: "You have successfully mastered Bunsen burner safety and flame operation! Click below to return to Step 1.",
+                succBtn5: "Return to Step 1",
+                sbTitle: "💥 Strike-Back Occurred!",
+                sbBody: "Air hole opened to 100%! Air velocity exceeded gas propagation speed, causing flame to strike down the tube and burn inside at the jet nozzle.",
+                sbEmergencyTitle: "Emergency Procedure:",
+                sbEmergency1: "Turn off gas tap immediately to prevent overheating.",
+                sbEmergency2: "Do NOT touch chimney (Extremely hot!).",
+                sbEmergency3: "Close air hole before attempting re-ignition.",
+                sbRetryBtn: "Turn Off Gas & Retry Step 4",
+                warnTitle: "⚠️ Safety Warning: Incorrect Order!",
+                warnBody: "Turning on gas without an active spark is dangerous! Methane gas rapidly accumulates in air, creating explosion risks.",
+                warnOkBtn: "Understood, turn off gas & retry",
+                s5AlertTitleText: "Close Air Hole First!",
+                s5AlertBodyText: "For safety, please rotate the air collar to 0% (return to yellow safety flame) before shutting off the gas valve!",
+                s5AlertOkBtnText: "Understood, close air hole first"
+            }
+        };
+
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSparkSound() {
+            if (isAudioMuted) return;
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.08);
+        }
+
+        function playGasHissSound(duration = 0.5, pitchMultiplier = 1.0) {
+            if (isAudioMuted) return;
+            initAudio();
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 1200 * pitchMultiplier;
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.15 * Math.min(1.5, pitchMultiplier), audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start();
+        }
+
+        function playSuccessSound() {
+            if (isAudioMuted) return;
+            initAudio();
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, now);
+            osc.frequency.setValueAtTime(659.25, now + 0.1);
+            osc.frequency.setValueAtTime(783.99, now + 0.2);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(now + 0.4);
+        }
+
+        function playExplosionSound() {
+            if (isAudioMuted) return;
+            initAudio();
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+            gain.gain.setValueAtTime(0.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(now + 0.5);
+        }
+
+        function toggleLanguage() {
+            currentLanguage = currentLanguage === 'zh' ? 'en' : 'zh';
+            updateAllTexts();
+        }
+
+        function toggleAudio() {
+            isAudioMuted = !isAudioMuted;
+            const icon = document.getElementById('soundIcon');
+            const text = document.getElementById('soundText');
+            if (isAudioMuted) {
+                icon.className = 'fa-solid fa-volume-xmark text-slate-400';
+                text.textContent = i18n[currentLanguage].soundOff;
+            } else {
+                icon.className = 'fa-solid fa-volume-high text-brand-400';
+                text.textContent = i18n[currentLanguage].soundOn;
+            }
+        }
+
+        function updateAllTexts() {
+            const t = i18n[currentLanguage];
+            document.getElementById('headerSubtext').textContent = t.headerSub;
+            document.getElementById('langText').textContent = t.langBtn;
+            document.getElementById('soundText').textContent = isAudioMuted ? t.soundOff : t.soundOn;
+            document.getElementById('pedagogyBtnText').textContent = t.pedagogyBtn;
+            document.getElementById('resetBtnText').textContent = t.resetBtn;
+            document.getElementById('prevBtnText').textContent = t.prevBtn;
+            document.getElementById('nextBtnText').textContent = (currentStep === 5 && stepCompleted[4]) ? t.loopToStep1Btn : t.nextBtn;
+            document.getElementById('footerStepText').textContent = t.stepText;
+            document.getElementById('footerStepOf').textContent = t.stepOf;
+
+            // Step pills
+            for (let i = 1; i <= 5; i++) {
+                document.getElementById(`sPillTitle${i}`).textContent = t.pills[i-1].title;
+                document.getElementById(`sPillSub${i}`).textContent = t.pills[i-1].sub;
+            }
+
+            // Current step instructions
+            document.getElementById('instructionTitle').textContent = t.instructions[currentStep-1].title;
+            document.getElementById('instructionText').textContent = t.instructions[currentStep-1].text;
+            document.getElementById('statusBadgeText').textContent = stepCompleted[currentStep-1] ? t.statusDone : t.statusNeedOp;
+
+            // Screen 1
+            document.getElementById('s1BenchTitle').textContent = t.s1BenchTitle;
+            document.getElementById('s1TargetLabel').textContent = t.s1TargetLabel;
+            document.getElementById('s1ClickWearText').innerHTML = `<i class="fa-solid fa-hand-pointer mr-1"></i> ${t.s1ClickWear}`;
+            document.getElementById('s1NoteText').textContent = t.s1Note;
+
+            // Screen 2
+            document.getElementById('s2CloseUpText').textContent = t.s2CloseUp;
+            document.getElementById('s2InstructionTitle').textContent = t.s2Title;
+            document.getElementById('s2InstructionBody').innerHTML = t.s2Body;
+            document.getElementById('s2DragTip').innerHTML = `<i class="fa-solid fa-arrows-left-right text-brand-400"></i> ${t.s2Tip}`;
+            document.getElementById('s2BtnClose').textContent = t.s2BtnClose;
+            document.getElementById('s2BtnOpen').textContent = t.s2BtnOpen;
+            
+            const p2 = Math.round(step2AirHolePercent);
+            document.getElementById('airHoleStatusText').textContent = p2 === 0 ? t.airHoleClosed : `${t.airHoleOpen} (${p2}%)`;
+
+            // Screen 3
+            document.getElementById('s3ProcedureTitle').textContent = t.s3Title;
+            document.getElementById('s3ProcedureBody').innerHTML = t.s3Body;
+            document.getElementById('s3BtnTriggerText').textContent = t.s3TriggerBtn;
+            document.getElementById('s3BtnGasText').textContent = t.s3GasBtn;
+            document.getElementById('s3TipText').textContent = t.s3Tip;
+            document.getElementById('lighterStatusBadge').textContent = lighterSparkActive ? t.lighterActive : t.lighterReady;
+            document.getElementById('gasTapStatusBadge').textContent = step3GasTapOpen ? t.gasOpen : t.gasClosed;
+
+            // Screen 4
+            document.getElementById('s4ControlTitle').textContent = t.s4Title;
+            document.getElementById('s4ControlDesc').innerHTML = t.s4Body;
+            document.getElementById('s4TempLabel').textContent = t.s4TempLabel;
+            document.getElementById('s4CombustionLabel').textContent = t.s4CombustionLabel;
+            
+            // Trigger Step 4 UI refresh to translate dynamic labels
+            updateStep4FlameUI();
+
+            // Screen 5
+            document.getElementById('s5ShutdownTitle').textContent = t.s5Title;
+            document.getElementById('s5ShutdownDesc').innerHTML = t.s5Body;
+            document.getElementById('s5CollarStepTitle').textContent = t.s5CollarStep;
+            document.getElementById('s5CollarDragHint').innerHTML = `<i class="fa-solid fa-arrows-left-right text-brand-400"></i> ${t.s5DragHint}`;
+            document.getElementById('s5GasLabel').textContent = t.s5GasLabel;
+            document.getElementById('s5BtnGasOffText').textContent = t.s5GasOffBtn;
+            document.getElementById('s5TipText').textContent = t.s5Tip;
+            document.getElementById('s5ZoomLabel').innerHTML = `<i class="fa-solid fa-magnifying-glass font-bold text-amber-400"></i> ${t.s5AirHoleZoom}`;
+
+            // Modals
+            document.getElementById('pedagogyModalTitle').textContent = t.pedagogyTitle;
+            document.getElementById('pedagogyModalSubtitle').textContent = t.pedagogySub;
+            
+            if (currentStep === 5 && stepCompleted[4]) {
+                document.getElementById('successModalTitle').textContent = t.succTitle5;
+                document.getElementById('successModalMsg').textContent = t.succMsg5;
+                document.getElementById('succProceedText').textContent = t.succBtn5;
+            } else {
+                document.getElementById('successModalTitle').textContent = t.succTitle;
+                document.getElementById('successModalMsg').textContent = t.succMsg;
+                document.getElementById('succProceedText').textContent = t.succBtn;
+            }
+
+            document.getElementById('sbTitle').textContent = t.sbTitle;
+            document.getElementById('sbBody').textContent = t.sbBody;
+            document.getElementById('sbEmergencyTitle').textContent = t.sbEmergencyTitle;
+            document.getElementById('sbEmergency1').textContent = t.sbEmergency1;
+            document.getElementById('sbEmergency2').textContent = t.sbEmergency2;
+            document.getElementById('sbEmergency3').textContent = t.sbEmergency3;
+            document.getElementById('sbRetryText').textContent = t.sbRetryBtn;
+            document.getElementById('warnTitle').textContent = t.warnTitle;
+            document.getElementById('warnBody').textContent = t.warnBody;
+            document.getElementById('warnOkText').textContent = t.warnOkBtn;
+
+            document.getElementById('s5AlertTitle').textContent = t.s5AlertTitleText;
+            document.getElementById('s5AlertBody').textContent = t.s5AlertBodyText;
+            document.getElementById('s5AlertOkBtn').textContent = t.s5AlertOkBtnText;
+        }
+
+        function setStepCompleted(stepNum, completed = true) {
+            stepCompleted[stepNum - 1] = completed;
+            const badge = document.getElementById('stepStatusBadge');
+            const badgeText = document.getElementById('statusBadgeText');
+            const nextBtn = document.getElementById('nextStepBtn');
+
+            if (completed) {
+                badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                badgeText.textContent = i18n[currentLanguage].statusDone;
+                nextBtn.disabled = false;
+                nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                nextBtn.classList.add('hover:bg-brand-500');
+
+                if (stepNum === 5) {
+                    document.getElementById('nextBtnText').textContent = i18n[currentLanguage].loopToStep1Btn;
+                }
+            } else {
+                badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30";
+                badgeText.textContent = i18n[currentLanguage].statusNeedOp;
+                nextBtn.disabled = true;
+                nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // Screen 1: Equip Goggles
+        function equipGogglesDirect() {
+            if (gogglesEquipped) return;
+            gogglesEquipped = true;
+            document.getElementById('fittedGoggles').classList.remove('hidden');
+            document.getElementById('gogglesDraggable').classList.add('opacity-40', 'pointer-events-none');
+            document.getElementById('mouth').setAttribute('d', 'M 82 125 Q 100 150 118 125'); // Smile mouth
+            playSuccessSound();
+            setStepCompleted(1, true);
+            showSuccessModal();
+        }
+
+        // Screen 2: Air hole collar rotation logic
+        function setCollarAngle(percent) {
+            step2AirHolePercent = Math.max(0, Math.min(100, percent));
+            const collarGroup = document.getElementById('collarSvgGroup');
+            const collarHoleRect = document.getElementById('collarHoleRect');
+            const statusText = document.getElementById('airHoleStatusText');
+            
+            const shiftX = (step2AirHolePercent - 100) * 0.35; 
+            collarGroup.setAttribute('transform', `translate(${shiftX}, 0)`);
+            collarHoleRect.setAttribute('width', Math.max(0, 30 * (step2AirHolePercent / 100)));
+
+            const roundedP = Math.round(step2AirHolePercent);
+            if (roundedP === 0) {
+                statusText.className = "text-sm font-bold font-mono text-emerald-400";
+                statusText.textContent = i18n[currentLanguage].airHoleClosed;
+                if (!stepCompleted[1]) {
+                    playSuccessSound();
+                    setStepCompleted(2, true);
+                    showSuccessModal();
+                }
+            } else {
+                statusText.className = "text-sm font-bold font-mono text-amber-400";
+                statusText.textContent = `${i18n[currentLanguage].airHoleOpen} (${roundedP}%)`;
+                setStepCompleted(2, false);
+            }
+        }
+
+        // Pointer Drag Handling for Step 2 Collar
+        let isDraggingCollar2 = false;
+        let startX2 = 0;
+        let startPercent2 = 100;
+        const step2Svg = document.getElementById('step2CollarSvg');
+
+        step2Svg.addEventListener('pointerdown', (e) => {
+            isDraggingCollar2 = true;
+            startX2 = e.clientX;
+            startPercent2 = step2AirHolePercent;
+            step2Svg.setPointerCapture(e.pointerId);
+        });
+
+        step2Svg.addEventListener('pointermove', (e) => {
+            if (!isDraggingCollar2) return;
+            const deltaX = e.clientX - startX2;
+            let newPercent = startPercent2 + (deltaX / 1.2);
+            setCollarAngle(newPercent);
+        });
+
+        const endDrag2 = (e) => {
+            if (isDraggingCollar2) {
+                isDraggingCollar2 = false;
+                try { step2Svg.releasePointerCapture(e.pointerId); } catch(err){}
+            }
+        };
+        step2Svg.addEventListener('pointerup', endDrag2);
+        step2Svg.addEventListener('pointercancel', endDrag2);
+
+        // Screen 3: Spark Lighter and Gas Tap
+        function triggerLighterSpark() {
+            lighterSparkActive = true;
+            playSparkSound();
+            document.getElementById('lighterSparkFlame').classList.remove('hidden');
+            document.getElementById('lighterStatusBadge').textContent = i18n[currentLanguage].lighterActive;
+            document.getElementById('lighterStatusBadge').className = "px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse font-bold";
+
+            if (lighterSparkTimer) clearTimeout(lighterSparkTimer);
+            lighterSparkTimer = setTimeout(() => {
+                lighterSparkActive = false;
+                document.getElementById('lighterSparkFlame').classList.add('hidden');
+                document.getElementById('lighterStatusBadge').textContent = i18n[currentLanguage].lighterReady;
+                document.getElementById('lighterStatusBadge').className = "px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 border border-slate-700";
+            }, 3000);
+        }
+
+        function handleGasTapClick() {
+            if (step3GasTapOpen) return;
+
+            if (lighterSparkActive) {
+                step3GasTapOpen = true;
+                document.getElementById('gasValveHandle').classList.add('-rotate-90');
+                document.getElementById('safetyFlameGroup').classList.remove('hidden');
+                document.getElementById('gasTapStatusBadge').textContent = i18n[currentLanguage].gasOpen;
+                document.getElementById('gasTapStatusBadge').className = "px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold";
+                playGasHissSound(1.5, 1.0);
+                playSuccessSound();
+                setStepCompleted(3, true);
+                showSuccessModal();
+            } else {
+                playExplosionSound();
+                document.getElementById('warningModal').classList.remove('hidden');
+            }
+        }
+
+        function closeWarningModal() {
+            document.getElementById('warningModal').classList.add('hidden');
+        }
+
+        // Screen 4: Continuous Flame Physics & Color Interpolation
+        function handleStep4CollarChange(val) {
+            step4CollarPercent = parseInt(val, 10);
+            updateStep4FlameUI();
+        }
+
+        function setStep4Collar(val) {
+            document.getElementById('airHoleSlider4').value = val;
+            handleStep4CollarChange(val);
+        }
+
+        // Color helper functions
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const num = parseInt(hex, 16);
+            return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+        }
+
+        function rgbToHex(r, g, b) {
+            return '#' + [r, g, b].map(x => Math.round(Math.max(0, Math.min(255, x))).toString(16).padStart(2, '0')).join('');
+        }
+
+        function interpolateColor(color1, color2, factor) {
+            const rgb1 = hexToRgb(color1);
+            const rgb2 = hexToRgb(color2);
+            return rgbToHex(
+                lerp(rgb1.r, rgb2.r, factor),
+                lerp(rgb1.g, rgb2.g, factor),
+                lerp(rgb1.b, rgb2.b, factor)
+            );
+        }
+
+        function updateStep4FlameUI() {
+            const p = step4CollarPercent;
+            const outer = document.getElementById('outerFlamePath');
+            const inner = document.getElementById('innerFlamePath');
+            const flameGroup = document.getElementById('s4FlameGroup');
+            const hole = document.getElementById('s4AirHole');
+            const tag = document.getElementById('s4FlameTypeTag');
+            const temp = document.getElementById('tempReadout');
+            const tempBar = document.getElementById('tempProgressBar');
+            const comb = document.getElementById('combustionTypeReadout');
+            const airDisplay = document.getElementById('s4AirHoleDisplay');
+
+            const tLang = i18n[currentLanguage];
+
+            if (airDisplay) airDisplay.textContent = `氣孔開度: ${p}%`;
+            hole.setAttribute('width', Math.floor(14 * (p / 100)));
+
+            // Strike back condition
+            if (p >= 95) {
+                playExplosionSound();
+                document.getElementById('mainLabStage').classList.add('shake');
+                setTimeout(() => document.getElementById('mainLabStage').classList.remove('shake'), 500);
+                document.getElementById('strikeBackModal').classList.remove('hidden');
+                setStepCompleted(4, false);
+                return;
+            }
+
+            // Calculate Dynamic Temperature (°C)
+            // 0% -> 300°C
+            // 50% -> 1150°C
+            // 75% -> 1500°C
+            // 90% -> 1450°C
+            let calculatedTemp = 300;
+            if (p <= 75) {
+                calculatedTemp = Math.round(300 + (1200 * Math.pow(p / 75, 1.2)));
+            } else {
+                calculatedTemp = Math.round(1500 - (50 * ((p - 75) / 15)));
+            }
+
+            // Temperature Progress Bar Width (%)
+            const tempPercent = Math.min(100, Math.max(0, ((calculatedTemp - 300) / 1200) * 100));
+            tempBar.style.width = `${tempPercent}%`;
+
+            // Continuous Color Stop Interpolation based on percentage p
+            let stop0Color, stop50Color, stop100Color;
+            let innerOpacity = 0;
+            let pitchMultiplier = 1.0;
+
+            if (p <= 25) {
+                // Transition from Pure Luminous Yellow to Warm Yellow-Orange
+                const factor = p / 25;
+                stop0Color = interpolateColor('#ff4500', '#ff2200', factor);
+                stop50Color = interpolateColor('#ffa500', '#ff8800', factor);
+                stop100Color = interpolateColor('#ffee00', '#ffcc00', factor);
+                innerOpacity = 0;
+                
+                flameGroup.className = "animate-irregular-flicker glow-yellow";
+                tag.className = "text-xs font-bold font-mono px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30";
+                tag.textContent = tLang.s4YellowTag;
+                temp.textContent = `~${calculatedTemp}°C`;
+                temp.className = "font-bold text-amber-400 text-sm";
+                comb.textContent = tLang.s4CombYellow;
+                comb.className = "font-bold text-amber-300";
+                pitchMultiplier = 0.8;
+
+            } else if (p <= 45) {
+                // Transition from Warm Yellow-Orange to Pale Cyan-Blue
+                const factor = (p - 25) / 20;
+                stop0Color = interpolateColor('#ff2200', '#0044cc', factor);
+                stop50Color = interpolateColor('#ff8800', '#0088ff', factor);
+                stop100Color = interpolateColor('#ffcc00', '#38bdf8', factor);
+                innerOpacity = lerp(0, 0.7, factor);
+
+                flameGroup.className = "animate-flicker glow-yellow";
+                tag.className = "text-xs font-bold font-mono px-3 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30";
+                tag.textContent = tLang.s4TransTag;
+                temp.textContent = `~${calculatedTemp}°C`;
+                temp.className = "font-bold text-orange-400 text-sm";
+                comb.textContent = tLang.s4CombTrans;
+                comb.className = "font-bold text-orange-300";
+                pitchMultiplier = 1.1;
+
+            } else if (p <= 80) {
+                // Roaring Blue Heating Flame (Complete Combustion Zone)
+                const factor = (p - 45) / 35;
+                stop0Color = interpolateColor('#0044cc', '#0011aa', factor);
+                stop50Color = interpolateColor('#0088ff', '#0055ff', factor);
+                stop100Color = interpolateColor('#38bdf8', '#00f0ff', factor);
+                innerOpacity = lerp(0.7, 1.0, factor);
+
+                flameGroup.className = "animate-flicker glow-blue";
+                tag.className = "text-xs font-bold font-mono px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30";
+                tag.textContent = tLang.s4BlueTag;
+                temp.textContent = `~${calculatedTemp}°C (最高熱效能)`;
+                temp.className = "font-bold text-cyan-400 text-sm";
+                comb.textContent = tLang.s4CombBlue;
+                comb.className = "font-bold text-cyan-300";
+                pitchMultiplier = 1.4;
+
+                // Mark Step 4 completed when in complete combustion region
+                if (!stepCompleted[3]) {
+                    playSuccessSound();
+                    setStepCompleted(4, true);
+                    showSuccessModal();
+                }
+
+            } else {
+                // Excess Air / Near Strike-Back High-Frequency Roaring Zone (81% - 94%)
+                const factor = (p - 80) / 14;
+                stop0Color = interpolateColor('#0011aa', '#1e1b4b', factor);
+                stop50Color = interpolateColor('#0055ff', '#3b82f6', factor);
+                stop100Color = interpolateColor('#00f0ff', '#e0f2fe', factor);
+                innerOpacity = 1.0;
+
+                flameGroup.className = "animate-flicker glow-blue";
+                tag.className = "text-xs font-bold font-mono px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse";
+                tag.textContent = tLang.s4ExcessTag;
+                temp.textContent = `~${calculatedTemp}°C`;
+                temp.className = "font-bold text-indigo-300 text-sm";
+                comb.textContent = tLang.s4CombExcess;
+                comb.className = "font-bold text-indigo-300";
+                pitchMultiplier = 1.8;
+            }
+
+            // Apply SVG Stop Colors and Inner Cone Opacity
+            document.getElementById('s4GradStop0').setAttribute('stop-color', stop0Color);
+            document.getElementById('s4GradStop50').setAttribute('stop-color', stop50Color);
+            document.getElementById('s4GradStop100').setAttribute('stop-color', stop100Color);
+            inner.setAttribute('opacity', innerOpacity.toFixed(2));
+
+            // Dynamic flame shape scale (roaring flame shrinks slightly, tightens cone)
+            const scaleY = lerp(1.0, 0.88, p / 100);
+            const scaleX = lerp(1.0, 0.92, p / 100);
+            outer.setAttribute('transform', `scale(${scaleX}, ${scaleY}) origin(125, 105)`);
+
+            // Play gas hiss sound with adjusted pitch frequency
+            if (p > 0 && Math.random() < 0.25) {
+                playGasHissSound(0.2, pitchMultiplier);
+            }
+        }
+
+        function resetStep4AfterExplosion() {
+            document.getElementById('strikeBackModal').classList.add('hidden');
+            setStep4Collar(0);
+        }
+
+        // Screen 5: Safe Shutdown Procedure
+        function setStep5Collar(percent) {
+            step5CollarPercent = Math.max(0, Math.min(100, percent));
+            const outer = document.getElementById('s5OuterFlamePath');
+            const inner = document.getElementById('s5InnerFlamePath');
+            const badge = document.getElementById('s5AirHoleBadge');
+            const valText = document.getElementById('s5SliderValText');
+            const zoomStatus = document.getElementById('s5AirHoleZoomStatus');
+            const zoomGroup = document.getElementById('s5CollarZoomGroup');
+            const zoomRect = document.getElementById('s5CollarZoomRect');
+            const hole5 = document.getElementById('s5AirHole');
+
+            const shiftX = (step5CollarPercent - 100) * 0.35;
+            if (zoomGroup) zoomGroup.setAttribute('transform', `translate(${shiftX}, 0)`);
+            if (zoomRect) zoomRect.setAttribute('width', Math.max(0, 30 * (step5CollarPercent / 100)));
+            if (hole5) hole5.setAttribute('width', Math.floor(14 * (step5CollarPercent / 100)));
+
+            const roundedP = Math.round(step5CollarPercent);
+            if (roundedP === 0) {
+                outer.setAttribute('fill', 'url(#yellowFlameGrad)');
+                inner.setAttribute('opacity', '0');
+                badge.className = "px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold";
+                badge.textContent = i18n[currentLanguage].airHoleClosed;
+                valText.textContent = "0% (0°)";
+                valText.className = "text-emerald-400 font-mono";
+                zoomStatus.textContent = i18n[currentLanguage].airHoleClosed;
+                zoomStatus.className = "text-xs font-bold font-mono text-emerald-400";
+            } else {
+                outer.setAttribute('fill', 'url(#blueOuterGrad)');
+                inner.setAttribute('opacity', '1');
+                badge.className = "px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold";
+                badge.textContent = `氣孔: ${roundedP}% 打開`;
+                valText.textContent = `${roundedP}% (${Math.round(roundedP * 0.9)}°)`;
+                valText.className = "text-amber-400 font-mono";
+                zoomStatus.textContent = `氣孔: 打開 (${roundedP}%)`;
+                zoomStatus.className = "text-xs font-bold font-mono text-amber-400";
+            }
+        }
+
+        let isDraggingCollar5 = false;
+        let startX5 = 0;
+        let startPercent5 = 50;
+        const step5Svg = document.getElementById('s5CollarSvg');
+
+        step5Svg.addEventListener('pointerdown', (e) => {
+            isDraggingCollar5 = true;
+            startX5 = e.clientX;
+            startPercent5 = step5CollarPercent;
+            step5Svg.setPointerCapture(e.pointerId);
+        });
+
+        step5Svg.addEventListener('pointermove', (e) => {
+            if (!isDraggingCollar5) return;
+            const deltaX = e.clientX - startX5;
+            let newPercent = startPercent5 + (deltaX / 1.2);
+            setStep5Collar(newPercent);
+        });
+
+        const endDrag5 = (e) => {
+            if (isDraggingCollar5) {
+                isDraggingCollar5 = false;
+                try { step5Svg.releasePointerCapture(e.pointerId); } catch(err){}
+            }
+        };
+        step5Svg.addEventListener('pointerup', endDrag5);
+        step5Svg.addEventListener('pointercancel', endDrag5);
+
+        function handleStep5GasTap() {
+            if (!step5GasTapOpen) return;
+
+            if (Math.round(step5CollarPercent) > 0) {
+                document.getElementById('step5AlertModal').classList.remove('hidden');
+                return;
+            }
+
+            step5GasTapOpen = false;
+            document.getElementById('s5FlameGroup').classList.add('hidden');
+            document.getElementById('s5GasValveHandle').classList.remove('-rotate-90');
+            
+            const badge = document.getElementById('s5GasTapBadge');
+            badge.className = "px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 border border-slate-700 font-bold";
+            badge.textContent = i18n[currentLanguage].gasClosed;
+
+            playSuccessSound();
+            setStepCompleted(5, true);
+            showSuccessModal();
+        }
+
+        function closeStep5AlertModal() {
+            document.getElementById('step5AlertModal').classList.add('hidden');
+        }
+
+        // Navigation and Modals
+        function navigateStep(direction) {
+            const newStep = currentStep + direction;
+            if (newStep < 1) return;
+            if (newStep > 5) {
+                resetLab();
+                return;
+            }
+
+            document.querySelectorAll('.lab-screen').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`screen${newStep}`).classList.remove('hidden');
+            document.getElementById(`screen${newStep}`).classList.add('flex');
+
+            for (let i = 1; i <= 5; i++) {
+                const pill = document.getElementById(`stepPill-${i}`);
+                if (i === newStep) {
+                    pill.className = "step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-brand-600/20 border-brand-500 text-white shadow-lg";
+                } else if (stepCompleted[i - 1]) {
+                    pill.className = "step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-emerald-500/10 border-emerald-500/30 text-emerald-300";
+                } else {
+                    pill.className = "step-pill transition-all duration-300 p-3 rounded-xl border flex items-center gap-3 bg-slate-800/80 border-slate-700 text-slate-400";
+                }
+            }
+
+            currentStep = newStep;
+            document.getElementById('currentStepNum').textContent = currentStep;
+            document.getElementById('prevStepBtn').disabled = currentStep === 1;
+            if (currentStep === 1) {
+                document.getElementById('prevStepBtn').classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                document.getElementById('prevStepBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            setStepCompleted(currentStep, stepCompleted[currentStep - 1]);
+            updateAllTexts();
+        }
+
+        function showSuccessModal() {
+            updateAllTexts();
+            document.getElementById('successModal').classList.remove('hidden');
+        }
+
+        function closeSuccessModalAndProceed() {
+            document.getElementById('successModal').classList.add('hidden');
+            if (currentStep < 5) {
+                navigateStep(1);
+            } else {
+                resetLab();
+            }
+        }
+
+        function togglePedagogyModal() {
+            const modal = document.getElementById('pedagogyModal');
+            modal.classList.toggle('hidden');
+        }
+
+        function resetLab() {
+            gogglesEquipped = false;
+            step2AirHolePercent = 100;
+            lighterSparkActive = false;
+            if (lighterSparkTimer) clearTimeout(lighterSparkTimer);
+            step3GasTapOpen = false;
+            step4CollarPercent = 0;
+            step5CollarPercent = 50;
+            step5GasTapOpen = true;
+
+            stepCompleted = [false, false, false, false, false];
+
+            // Reset UI states
+            document.getElementById('fittedGoggles').classList.add('hidden');
+            document.getElementById('gogglesDraggable').classList.remove('opacity-40', 'pointer-events-none');
+            document.getElementById('mouth').setAttribute('d', 'M 82 130 Q 100 145 118 130');
+
+            setCollarAngle(100);
+
+            document.getElementById('lighterSparkFlame').classList.add('hidden');
+            document.getElementById('safetyFlameGroup').classList.add('hidden');
+            document.getElementById('gasValveHandle').classList.remove('-rotate-90');
+
+            setStep4Collar(0);
+            setStep5Collar(50);
+            document.getElementById('s5FlameGroup').classList.remove('hidden');
+            document.getElementById('s5GasValveHandle').classList.add('-rotate-90');
+
+            currentStep = 1;
+            navigateStep(0);
+        }
+
+        window.onload = function() {
+            updateAllTexts();
+            setStep4Collar(0);
+            setStep5Collar(50);
+        };
+    </script>
+</body>
+</html>
